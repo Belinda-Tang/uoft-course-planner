@@ -1,0 +1,162 @@
+# 多伦多大学选课信息爬虫 — 使用说明
+
+## 概述
+
+爬取 [Arts & Science Academic Calendar](https://artsci.calendar.utoronto.ca/) 上所有本科专业（Specialist / Major / Minor / Focus）的选课要求，
+输出结构化 JSON 数据，供选课规划助手使用。
+
+## 快速开始
+
+```bash
+# 安装依赖
+pip install requests beautifulsoup4
+
+# 测试模式（仅爬取 Computer Science + Data Science 两个 Section，约 78 个 Program）
+python scrape_uoft_programs.py --test
+
+# 完整爬取（所有学科，约 80+ 个 Section，预计 1000+ 个 Program）
+python scrape_uoft_programs.py
+```
+
+## 爬取策略（两级爬取，高效+准确）
+
+### Phase 1 — Section 页面（约 80 个页面）
+- URL 格式：`https://artsci.calendar.utoronto.ca/section/{学科名称}`
+- **每个 Section 页面已包含该学科所有 Program 的完整选课要求**
+- 从 `<h3 class="js-views-accordion-group-header">` 解析 Program 标题和代码
+- 从对应的 `<div class="views-field-field-completion-requirements">` 提取选课要求 HTML
+- **这一步已获取 95% 所需数据**，无需逐一爬取 Program 详情页
+
+### Phase 2 — Program 详情页（可选，仅对重点专业）
+- URL 格式：`https://artsci.calendar.utoronto.ca/program/{CODE}`
+- 获取更精细的课程年际分布数据
+- 默认仅对 CS、DS 等重点专业执行
+
+## 网站 HTML 结构解析
+
+### Section 页面结构
+```html
+<!-- 每个 Program 是一个 accordion 项 -->
+<h3 class="js-views-accordion-group-header">
+  <div aria-label="Computer Science Specialist (Science Program) - ASSPE1689">
+    Computer Science Specialist (Science Program) - ASSPE1689
+  </div>
+</h3>
+<div class="views-row">
+  <!-- 入学要求 -->
+  <div class="views-field views-field-field-enrolment-requirements">
+    <strong>Enrolment Requirements: </strong>
+    <div class="field-content">...</div>
+  </div>
+  <!-- 完成要求 ★最关键★ -->
+  <div class="views-field views-field-field-completion-requirements">
+    <strong>Completion Requirements: </strong>
+    <div class="field-content">
+      <p>(12.0 credits, including at least 1.5 credits at the 400-level)</p>
+      <p><em>First year</em> (2.5 credits):</p>
+      <p>1. <a href="/course/CSC110Y1">CSC110Y1</a>, ...</p>
+      ...
+    </div>
+  </div>
+</div>
+```
+
+### 课程链接格式
+- 所有课程代码都在 `<a href="/course/CODE">` 中
+- 正则匹配：`/course/([A-Z]{2,6}\d{3}[HY][0159])`
+  - 例子：CSC110Y1, MAT137Y1, STA247H1, EEB125H1
+
+### Program 代码规则
+| 前缀 | 含义 | 例子 |
+|------|------|------|
+| `ASSPE` | Specialist | ASSPE1689 (CS Specialist) |
+| `ASMAJ` | Major | ASMAJ1689 (CS Major) |
+| `ASMIN` | Minor | ASMIN1689 (CS Minor) |
+| `ASFOC` | Focus | ASFOC1689B (AI Focus - Specialist) |
+
+Focus 代码字母规则（1689=CS, 1687=DS）：
+- **Specialist Focus**: A,B,C,D,F,G,H,I,J,T
+- **Major Focus**: K,L,M,N,O,P,Q,R,S,U
+
+## 输出文件
+
+| 文件 | 说明 |
+|------|------|
+| `uoft_programs_raw.json` | 所有 Program 的原始数据（含完整的 enrolment + completion HTML） |
+| `uoft_programs_structured.json` | 结构化数据，适配选课规划助手格式 |
+| `uoft_courses.json` | 课程 → Program 反向索引 |
+| `scrape_progress.json` | 断点续爬进度（自动生成/清理） |
+
+### 结构化数据格式
+
+```json
+{
+  "programs": [
+    {
+      "id": "asspe1689",
+      "name": "Computer Science Specialist",
+      "type": "specialist",
+      "code": "ASSPE1689",
+      "total_fce": 12.0,
+      "is_focus": false,
+      "focus_name": null,
+      "course_codes": ["CSC110Y1", "CSC111H1", ...],
+      "year_groups": {
+        "first_year": {
+          "fce": 2.5,
+          "courses": ["CSC110Y1", "CSC111H1", "MAT137Y1", ...]
+        },
+        "second_year": {
+          "fce": 3.5,
+          "courses": ["CSC207H1", "CSC236H1", ...]
+        },
+        "later_years": {
+          "fce": 6.0,
+          "courses": ["CSC369H1", "CSC373H1", ...]
+        }
+      },
+      "source_url": "https://artsci.calendar.utoronto.ca/program/asspe1689"
+    }
+  ],
+  "courses": {
+    "CSC110Y1": {
+      "code": "CSC110Y1",
+      "programs": ["asspe1689", "asmaj1689"],
+      "subject": "CSC"
+    }
+  },
+  "focus_hierarchy": {
+    "asspe1689": ["asfoc1689b", "asfoc1689c", ...],
+    "asmaj1689": ["asfoc1689k", "asfoc1689m", ...]
+  }
+}
+```
+
+## 断点续爬
+
+脚本中途中断后，重新运行即可自动续传。进度保存在 `scrape_progress.json`。
+完整爬取完成后会自动清理进度文件；测试模式不清理。
+
+## 注意事项
+
+1. **请求频率**：Section 之间间隔 1.5 秒，礼貌爬取
+2. **内容版权**：数据来自多伦多大学官方学术日历，仅供个人学习使用
+3. **数据时效**：Academic Calendar 每年更新（当前为 2026-27 版）
+4. **仅限于 Arts & Science**：不包括 UTM、UTSC、Engineering 等院系（可扩展）
+5. **"Same requirements" Focus**：部分 Major Focus 与其 Specialist 版要求完全相同（如 AI Focus），由 `is_same_requirements` 字段标记
+
+## 扩展到其他院系
+
+如需爬取 UTM、UTSC、Engineering 的选课信息：
+
+| 院系 | 基础 URL |
+|------|----------|
+| Arts & Science (St. George) | `https://artsci.calendar.utoronto.ca` ← 当前 |
+| U of T Mississauga | `https://utm.calendar.utoronto.ca` |
+| U of T Scarborough | `https://utsc.calendar.utoronto.ca` |
+| Engineering | `https://engineering.calendar.utoronto.ca` |
+| Architecture | `https://daniels.calendar.utoronto.ca` |
+| Music | `https://music.calendar.utoronto.ca` |
+
+修改脚本开头的 `BASE_URL` 和 `KNOWN_SECTIONS` 即可适配。
+（注意：不同院系的 HTML 结构可能略有差异，需相应调整解析逻辑）

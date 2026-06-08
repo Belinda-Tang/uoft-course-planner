@@ -1,0 +1,10 @@
+# Scraper output (large generated files)
+docs/*.json
+
+# Python cache
+__pycache__/
+*.pyc
+
+# OS files
+.DS_Store
+Thumbs.db

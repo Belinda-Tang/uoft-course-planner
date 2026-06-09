@@ -61,6 +61,13 @@
     .setting-group select{padding:var(--spacing-sm) var(--spacing-md);border:1.5px solid var(--color-border);border-radius:var(--radius-sm);font-size:14px;font-family:var(--font-main);background:var(--color-bg);color:var(--color-text);cursor:pointer;min-height:var(--tap-min);transition:all .2s;-webkit-appearance:none;appearance:none;font-weight:var(--font-weight-normal);background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M6 8L1 3h10z' fill='%238C8C8C'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center;padding-right:32px}
     .setting-group select:focus{outline:none;border-color:var(--color-primary-dark);box-shadow:0 0 0 3px var(--color-primary-light)}
 
+    /* Help Panel */
+    .help-panel{background:var(--color-surface);border-radius:var(--radius);padding:var(--spacing-md) var(--spacing-lg);margin-bottom:var(--spacing-md);box-shadow:var(--shadow-sm);border:1px solid var(--color-border);cursor:default}
+    .help-panel summary{font-weight:var(--font-weight-semibold);font-size:14px;cursor:pointer;padding:4px 0;user-select:none}
+    .help-panel .help-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:var(--spacing-sm);margin-top:var(--spacing-sm);font-size:12px;color:var(--color-text);line-height:1.5}
+    .help-panel .help-grid strong{color:var(--color-primary-dark)}
+    @media(max-width:768px){.help-panel .help-grid{grid-template-columns:1fr}}
+
     /* Plans */
     .plans-container{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,420px),1fr));gap:var(--spacing-lg);margin-bottom:var(--spacing-md)}
     .plan-card{background:var(--color-surface);border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden;transition:all .3s;border:1px solid var(--color-border)}
@@ -305,6 +312,20 @@
       </div>
       <button class="btn btn-primary" id="addPlanBtn">＋ Add Plan</button>
     </section>
+
+    <details class="help-panel" id="helpPanel">
+      <summary>📘 How to Use This Planner</summary>
+      <div class="help-grid">
+        <div><strong>🔍 Pick Programs</strong><br>Type in the search box to find your program (e.g. "Computer Science"). Add up to 3 per plan. Click <strong>＋ Add Plan</strong> for side-by-side comparison.</div>
+        <div><strong>✅ Mark Completed</strong><br>Click any course card to toggle it as completed. Use <strong>Mark Past Done</strong> to complete all past-year courses at once.</div>
+        <div><strong>↔ Switch Difficulty</strong><br>Hover a course card and click <strong>↔</strong> to swap between standard and enriched paths (e.g. MAT137 ↔ MAT157).</div>
+        <div><strong>✕ Remove Courses</strong><br>Hover and click <strong>×</strong> to hide a course. Removed courses appear below the grid — click <strong>↩</strong> to restore them.</div>
+        <div><strong>📋 Course Pool</strong><br>Upper-year elective courses are in the <strong>blue pool section</strong> below the grid, grouped by topic. Click <strong>＋</strong> to add (prerequisites auto-included).</div>
+        <div><strong>↕ Drag & Drop</strong><br>Drag any course card to a different semester to move it. Summer works the same as Fall/Winter.</div>
+        <div><strong>☀️ Summer</strong><br>If Fall/Winter exceed 6 courses, extras overflow to Summer. You can also add courses directly to Summer.</div>
+        <div><strong>🎯 Breadth & FCE</strong><br>Green bar = breadth met. Orange = not yet. <strong>Red warning</strong> appears if total FCE exceeds 20.</div>
+      </div>
+    </details>
 
     <section class="plans-container" id="plansContainer"></section>
 
@@ -6483,15 +6504,12 @@ const PROGRAMS = [
             ${switchBtn}${removeBtn}
           </div>`;
         }).join('');
-        // Fill elective placeholders
-        if ((term === 'F' || term === 'S') && !isPast && courses.filter(c=>!customCodes.includes(c)).length < 5) {
+        // Fill elective placeholders (Fall/Winter/Summer, current & future)
+        if ((term === 'F' || term === 'S' || term === 'Su') && !isPast && courses.filter(c=>!customCodes.includes(c)).length < 5) {
           const needed = 5 - courses.length;
           for (let i=0; i<needed; i++) {
             html += `<div class="course-card empty-slot" data-plan="${plan.id}" data-sem="${semLabel}" data-action="add-elective" title="Click to search & add a course">+ Elective</div>`;
           }
-        }
-        if (courses.length === 0 && !isPast && term === 'Su') {
-          html = '<div style="color:#ccc;font-size:10px;text-align:center;padding:8px;">—</div>';
         }
         if (isPast && courses.length === 0) {
           html = '<div style="color:#ccc;font-size:10px;text-align:center;padding:8px;">—</div>';
@@ -6506,7 +6524,7 @@ const PROGRAMS = [
         <div class="grid-year" style="${rowBg}">Y${y}${isPast?' ✓':isCurrent?' ▶':''}</div>
         <div class="grid-cell" style="${rowBg}">${renderCell(fall?.courses, 'F', `Y${y} Fall`)}${fallCount>5?`<span class="load-warning">⚠️${fallCount}</span>`:''}</div>
         <div class="grid-cell" style="${rowBg}">${renderCell(winter?.courses, 'S', `Y${y} Winter`)}${winterCount>5?`<span class="load-warning">⚠️${winterCount}</span>`:''}</div>
-        <div class="grid-cell" style="${rowBg}">${renderCell(summer?.courses, 'Su', `Y${y} Summer`)}</div>
+        <div class="grid-cell" style="${rowBg}">${renderCell(summer?.courses, 'Su', `Y${y} Summer`)}${(summer?.courses?.length||0)>5?`<span class="load-warning">⚠️${summer.courses.length}</span>`:''}</div>
       `);
     }
     return rows.join('');
